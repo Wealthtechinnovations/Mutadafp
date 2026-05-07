@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /$
+Allow: /blog
+Allow: /ressources
+Allow: /historique
+Allow: /mentions-legales
+Allow: /politique-confidentialite
+Disallow: /connexion
+Disallow: /inscription
+Disallow: /tableau-de-bord
+Disallow: /parametres
+Disallow: /admin
+Disallow: /api
+
+Sitemap: https://ais-pre-lri4hqsef6hmwnp7brg3bb-185480357685.europe-west2.run.app/sitemap.xml

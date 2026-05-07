@@ -1,0 +1,217 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum DossierStatus {
+  BROUILLON
+  SOUMIS
+  EN_REVUE
+  PIECES_MANQUANTES
+  COMPLET
+  TRANSMIS_AU_COLLECTIF
+  ARCHIVE
+}
+
+enum DocumentCategory {
+  PIECE_IDENTITE
+  PREUVE_PAIEMENT
+  CONTRAT_PROMESSE
+  CORRESPONDANCES
+  AUTRES
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  password          String
+  firstName         String
+  lastName          String
+  country           String
+  birthDate         DateTime
+  role              Role      @default(USER)
+  isEmailVerified   Boolean   @default(false)
+  isBlocked         Boolean   @default(false)
+  canMessage        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  dossier           Dossier?
+  sentRequests      ConversationRequest[] @relation("SentRequests")
+  receivedRequests  ConversationRequest[] @relation("ReceivedRequests")
+  conversations     ConversationParticipant[]
+  messages          Message[]
+  auditLogs         AuditLog[]
+  reports           Report[]              @relation("Reporter")
+  reportedUser      Report[]              @relation("Reported")
+  blogPosts         BlogPost[]
+}
+
+model Dossier {
+  id                String          @id @default(cuid())
+  userId            String          @unique
+  user              User            @relation(fields: [userId], references: [id])
+  status            DossierStatus   @default(BROUILLON)
+  facts             String?         // Exposé des faits
+  totalAmount       Float?
+  currency          String          @default("XOF")
+  completenessScore Int             @default(0)
+  submittedAt       DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  timelineEvents    TimelineEvent[]
+  documents         Document[]
+  statusHistory     StatusHistory[]
+  adminNotes        AdminNote[]
+}
+
+model TimelineEvent {
+  id          String   @id @default(cuid())
+  dossierId   String
+  dossier     Dossier  @relation(fields: [dossierId], references: [id])
+  date        DateTime
+  type        String   // PAIEMENT, PROMESSE, RELANCE, RDV, AUTRE
+  description String
+  amount      Float?
+  createdAt   DateTime @default(now())
+}
+
+model Document {
+  id          String           @id @default(cuid())
+  dossierId   String
+  dossier     Dossier          @relation(fields: [dossierId], references: [id])
+  category    DocumentCategory
+  fileName    String
+  fileUrl     String           // Path or S3 key
+  mimeType    String
+  size        Int
+  createdAt   DateTime         @default(now())
+}
+
+model StatusHistory {
+  id          String        @id @default(cuid())
+  dossierId   String
+  dossier     Dossier       @relation(fields: [dossierId], references: [id])
+  oldStatus   DossierStatus
+  newStatus   DossierStatus
+  comment     String?
+  changedById String
+  createdAt   DateTime      @default(now())
+}
+
+model AdminNote {
+  id          String   @id @default(cuid())
+  dossierId   String
+  dossier     Dossier  @relation(fields: [dossierId], references: [id])
+  content     String
+  adminId     String
+  createdAt   DateTime @default(now())
+}
+
+model ConversationRequest {
+  id          String   @id @default(cuid())
+  senderId    String
+  sender      User     @relation("SentRequests", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
+  status      String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  message     String?
+  createdAt   DateTime @default(now())
+}
+
+model Conversation {
+  id            String                    @id @default(cuid())
+  createdAt     DateTime                  @default(now())
+  participants  ConversationParticipant[]
+  messages      Message[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  content        String
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  details     String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id             String   @id @default(cuid())
+  reporterId     String
+  reporter       User     @relation("Reporter", fields: [reporterId], references: [id])
+  reportedUserId String?
+  reportedUser   User?    @relation("Reported", fields: [reportedUserId], references: [id])
+  contentId      String?  // ID of message or document
+  contentType    String?  // MESSAGE, DOCUMENT, PROFILE
+  reason         String
+  status         String   @default("PENDING") // PENDING, RESOLVED, DISMISSED
+  createdAt      DateTime @default(now())
+}
+
+model ContentPage {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  content     String
+  updatedAt   DateTime @updatedAt
+}
+
+model BlogPost {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  content     String
+  excerpt     String?
+  category    String?
+  sourceUrl   String?
+  published   Boolean  @default(false)
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  message     String
+  type        String   // INFO, WARNING, SUCCESS, MESSAGE
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
